@@ -1,20 +1,25 @@
-using Microsoft.Extensions.Http;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
 using Polly;
+using Polly.CircuitBreaker;
 using Polly.Extensions.Http;
+using Polly.Timeout;
+using System;
+using System.Net.Http;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Adicionar serviços ao contêiner.
+// Add services to the container.
 builder.Services.AddControllers();
 
-// Configuração do HttpClient com Polly Circuit Breaker
+// Configure HttpClient with Polly Circuit Breaker and Fallback
 builder.Services.AddHttpClient("HttpClientWithCB")
     .ConfigureHttpClient(client =>
     {
         client.BaseAddress = new Uri("https://jsonplaceholder.typicode.com/");
     })
-    .AddHttpMessageHandler(() =>
-        new PolicyHttpMessageHandler(GetCircuitBreakerPolicy()));
+    .AddPolicyHandler(GetCircuitBreakerPolicy())
+    .AddPolicyHandler(GetFallbackPolicy());
 
 static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy()
 {
@@ -23,9 +28,20 @@ static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy()
         .CircuitBreakerAsync(2, TimeSpan.FromMinutes(1));
 }
 
+static IAsyncPolicy<HttpResponseMessage> GetFallbackPolicy()
+{
+    return Policy<HttpResponseMessage>
+        .Handle<BrokenCircuitException>()
+        .Or<HttpRequestException>()
+        .FallbackAsync(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        {
+            Content = new StringContent("Fallback response due to Circuit Breaker.")
+        });
+}
+
 var app = builder.Build();
 
-// Configurar o pipeline de requisição HTTP.
+// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
@@ -33,6 +49,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseRouting();
 
+// Map endpoints
 app.UseEndpoints(endpoints =>
 {
     endpoints.MapControllers();

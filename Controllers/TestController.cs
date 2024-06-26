@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System.Net.Http;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
 
 [ApiController]
 [Route("[controller]")]
@@ -25,7 +27,7 @@ public class TestController : ControllerBase
         }
         catch (HttpRequestException)
         {
-            return StatusCode(503, "Serviço indisponível. O Circuit Breaker foi acionado.");
+            return StatusCode(503, "Service unavailable. The Circuit Breaker is open.");
         }
     }
 }
